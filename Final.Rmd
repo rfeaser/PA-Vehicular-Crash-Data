@@ -1,0 +1,404 @@
+---
+title: "2016 PA Crash Data"
+author: "Rebecca Feaser"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Load packages
+library(tidyverse)
+library(lubridate)
+library(ggmap)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(maps)
+
+#dataset:  https://data.pa.gov/Public-Safety/Crash-Data-1997-to-Current-Transportation/dc5b-gebx
+```
+
+#Introduction
+
+After driving every day on I-81 for the past three years for college, I would like to think that I have seen and have had to deal with my fair share of automobile accidents (although I have not personally been in an accident, just sat through the traffic or reroutes).  I have family that lives on opposites sides of Pennsylvania that forces me to drive both to Pittsburgh and Philadelphia several times a year, and one thing guaranteed almost every drive is traffic due to a car accident.  Thus while searching for data on Pennsylvania's free data website, data.pa.gov, I stumbled upon the "Crash Data, 1997 to Current, Transportation," and knew what I wanted to use for my final project.  This dataset contains 2.6 million rows of data about reported auto accidents across Pennsylvania's counties from 1997 to 2016! In order to ensure that the data was applicable to current road structures (and for the sake of simplicity), I decided to only use the 2016 data (some 128,000 rows).  There were 180 variables, some with most blank columns, that I chose to filter to 157, containing imperative information like weather conditions, road conditions, latitude and longitude of the accident, what type of person was driving, how many cars were involved, and much more.  To start this project I decided to look into 3 simple questions:  1. which counties are the most dangerous to drive in, 2. what road conditions produce the most accidents, and 3. what months/weekdays are the most dangerous to drive in.
+
+```{r message = FALSE , warning=FALSE}
+#Load data
+pacrashes <- read_csv("Simplified_Crash_Data_2016.csv", na = c("NA", "NULL", "")) %>% 
+  rename(Weekday = Day) %>% 
+  filter(!is.na(Longitude))
+
+#Creation of factors and order of factors for month and weekday
+pacrashes$Month <- as.factor(pacrashes$Month)
+pacrashes$Month <- factor(pacrashes$Month, levels = c(
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", 
+  "December"
+))
+
+pacrashes$Weekday <- as.factor(pacrashes$Weekday)
+pacrashes$Weekday <- factor(pacrashes$Weekday, levels = c(
+  "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+  "Saturday", "Sunday"
+))
+
+#Function that filters the dataset for a specified month
+monthlydata <- function(x, y){
+  x %>% 
+  filter(Month == y)
+}
+```
+
+#Data Analysis
+
+## Which counties have the most accidents?
+Larger cities tend to have more accidents as there are more people and closer quarters, so I was really curious to see where these areas were besides simply Allegheny County and Philadelphia County.  Cumberland County is growing very quickly size and was in fact the fastest growing county from 2010-2016 when it experienced growth of 3.6%.  This occurred while roughly 60% of other counties in Pennsylvania dropped in population!  However, Cumberland only topped 17 out of 67 in terms of highest proportion of accidents in Pennsylvania.  Unsurprisingly, Allegheny (containing Pittsburgh), Philadelphia, Montgomery (outskirts of Philadelphia), Bucks (outskirt of Philadelphia), and Lancaster counties were the largest counties with most transportation accidents in 2016.  In comparison to a PennDOT report on 2014 crashes, our counties with the most accidents are the same but slightly rearranged (as would be expected from year to year with population shifts).  State highways also tend to be the places with the most accidents and the counties with the most miles of highway are Allegheny, Bradford, Bucks, Chester, Crawford, and Lancaster counties.  However, Crawford did not even make my top 10 list in terms of highest proportion of PA accidents!  This is because this county only has a population of roughly 86,000 in 2016 in comparison to other large counties like Cumberland with 243,000 residents.  The maps of both Allegheny and Philadelphia county accidents are so dense with points of accidents that their roadways are mapped out in straight lines!  The Philadelphia crash map is perhaps the most interesting as the accidents clearly map the checkerboard layout of the city that William Penn designed.
+
+References:  http://cumberlink.com/cumberland-county-top-growth-in-cumberland-county/article_183dd240-141e-57f7-b52a-fbf261965bf9.html
+https://www.wieandlaw.com/whats-the-most-dangerous-road-in-pennsylvania/
+
+```{r warning= FALSE, message= FALSE}
+#Accident count per county
+pacrashes %>% 
+  group_by(CountyName) %>% 
+  summarize(total_crashes = n()) %>% 
+  arrange(desc(total_crashes)) %>% 
+  kable()
+
+#Dataset of all 2016 transportation crashes in Philadelphia
+philadelphia <- pacrashes %>%
+  filter(CountyName == "Philadelphia") %>%
+  select(Longitude, Latitude, RoadCondition) %>%
+  filter(!is.na(Longitude)) %>%
+  filter(!is.na(Latitude))
+
+philadelphia_map <- get_map("Philadelphia Pennsylvania", zoom = 10, maptype = "roadmap")
+
+#Map of all transportation accidents in Philadelphia
+ggmap(
+  philadelphia_map, extent = "device",
+  base_layer = ggplot(philadelphia, aes(Longitude, Latitude))
+) +
+  geom_point(alpha = 0.6, size = 0.8, aes(color = RoadCondition)) +
+  scale_x_continuous(limits = c(
+    min(philadelphia$Longitude),
+    max(philadelphia$Longitude)
+  )) +
+  scale_y_continuous(limits = c(
+    min(philadelphia$Latitude),
+    max(philadelphia$Latitude)
+  ))
+
+#Dataset of all 2016 transportation crashes in Allegheny
+allegheny <- pacrashes %>%
+  filter(CountyName == "Allegheny") %>%
+  select(Longitude, Latitude, RoadCondition) %>%
+  filter(!is.na(Longitude)) %>%
+  filter(!is.na(Latitude))
+
+allegheny_map <- get_map("Allegheny County Pennsylvania", zoom = 10, maptype = "roadmap")
+
+#Map of all transportation accidents in Allegheny
+ggmap(
+  allegheny_map, extent = "device",
+  base_layer = ggplot(allegheny, aes(Longitude, Latitude))
+) +
+  geom_point(alpha = 0.6, size = 0.8, aes(color = RoadCondition)) +
+  scale_x_continuous(limits = c(
+    min(allegheny$Longitude),
+    max(allegheny$Longitude)
+  )) +
+  scale_y_continuous(limits = c(
+    min(allegheny$Latitude),
+    max(allegheny$Latitude)
+  ))
+```
+
+##What road conditions cause the most accidents?
+One of my first ideas when I got this dataset was to see what road conditions caused the most accidents in Pennsylvania as the most destructive accidents seem to occur during bad weather (or at least these are the accidents reported by the media so these are the ones that come to mind the most).  I shouldn't have been surprised that dry conditions caused the most accidents in Pennsylvania over all.  Pennsylvania has a very diverse climate containing 4 different Koppen climate types:  oceanic, humid subtropical, warm-summer humid continental, and hot-summer humid continental.  Southeastern PA is a lot warmer than western PA that experiences harsh winters with lots of snow.  However, Pennsylvania on average across the entire state experiences 41 inches of rain a year (with counties closer to Lake Erie experiencing up to 100 inches of rain!), so I would have expected wet road conditions to compete with dry conditions in terms of accidents but drivers on dry roads have 5 times more accidents than on wet roads.  Drivers do tend to drive a lot more cautiously when conditions are bad which would help explain this.  I also found which counties had the highest proportion of accidents of certain road conditions, and the results were not too surprising (northern/western counties having more accidents with snow and ice) with the exception of Wyoming county having the largest proportion of dry road condition accidents.  Upon further investigation, I found that Pennsylvania Route 29 (connecting to the New York state line providing north-south road connections by secondary highway), PA-92, and U.S. Route 6 all run through Wyoming County and as stated before most accidents in PA happen on highways (and highways tend to be closed in bad conditions like heavy snow).  
+```{r, fig.height = 10, fig.width = 10}
+#Most Common Road Condition for an Accident in PA
+pacrashes %>% 
+mutate(total_crashes = n()) %>%
+  group_by(RoadCondition, total_crashes) %>%
+  summarise(total_condition = n()) %>%
+  ungroup() %>%
+  group_by(RoadCondition) %>%
+  summarise(prop = total_condition / total_crashes) %>%
+  arrange(desc(prop)) %>%
+  kable()
+
+#County with largest proportion of accidents per road condition
+pacrashes %>%
+  group_by(CountyName) %>%
+  mutate(total_crashes = n()) %>%
+  ungroup() %>%
+  group_by(CountyName, RoadCondition, total_crashes) %>%
+  summarise(total_condition = n()) %>%
+  mutate(prop_of_condition = total_condition / total_crashes) %>%
+  arrange(desc(prop_of_condition)) %>%
+  ungroup() %>%
+  group_by(RoadCondition) %>%
+  filter(prop_of_condition == max(prop_of_condition)) %>%
+  kable()
+
+#Proportion of a road condition that causes accidents in the County
+pacrashes %>%
+  ggplot() +
+  geom_bar(aes(CountyName, fill = RoadCondition), position = "fill") +
+  coord_flip() +
+  labs(
+    "center",
+    title = "Proportion of Accidents by Road Condition",
+    x = "County Name",
+    y = "Proportion"
+  )
+```
+
+##What months/weekdays have the most auto accidents?
+I had a general clue going into this question that weekends would have the most accidents as people rush home from work or embark on weekend vacations and months containing big holidays like November, December, and January would also see a higher proportion of accidents, and the results were not too surprising.  December had the most accidents (Christmas Eve, Christmas, New Year's Eve) followed by November (Thanksgiving and Black Friday not to mention presdential election day)  then October (Columbus Day weekend?) and finally January.  The dataset did not give the actual date of the accident, but it did give the day of the week which allowed me to find the most dangerous days to drive.  Top of the list was Wednesdays in November which makes sense because of Thanksgiving, but I am curious if this would be a different day over a longer period of time as Wednesday was also the day after what turned out to be an exciting election race (people were angry and drove a lot more aggressively?).  December and January made sense as weekends in December have a lot more shopping and New Year's Day was on a Friday in 2016.  Even the Fridays in September was logical as Labor Day weekend travelers would hit the road.  Thus, the top 10 weekdays for accidents all seem to be the weekday of a major holiday or leading to a major holiday in 2016 which lined up with this Yahoo article on the top 10 days for accidents based on data gathered by AAA:  https://www.yahoo.com/news/10-worst-days-for-driving-118807974462.html.
+
+I also wanted to find simply what days of the week produced the most accidents.  Friday turned out to have the largest number of accidents in 2016 overall followed by Tuesday.  The fact Saturday was fourth out of seven possible days in terms of number of accidents was really surprising to me as I would have expected most people to be out and about on their day off.  Perhaps if this was analyzed with all the data from 1997 to 2016, we would find that the weekends are the days with the most accidents.  I also created a boxplot of the weekdays that displays the mean number of accidents.  Monday, Wednesday (with the exception of the one outlier caused by accidents in November), and Sunday are all pretty much uniform.  Tuesday and Saturday are right skewed, while Friday is left skewed (a larger proportion of accidents occur on Friday we found out earlier).  I wished I could have had the data to make a boxplot of mean number of accidents per month for each year as it would be interesting to see how the mean number of accidents measure across each month (although I expect November and December would have much higher means).
+
+```{r fig.width = 9}
+#Month with the most accidents of 2016 in PA
+pacrashes %>%
+  mutate(total_crashes = n()) %>%
+  group_by(Month, total_crashes) %>%
+  summarise(total_day = n()) %>%
+  summarise(prop = total_day / total_crashes) %>%
+  arrange(desc(prop)) %>%
+  kable()
+
+#Day of the week with the most accidents of 2016 in PA
+pacrashes %>%
+  mutate(total_crashes = n()) %>%
+  group_by(Month, Weekday, total_crashes) %>%
+  summarise(total_day = n()) %>%
+  summarise(prop_of_accidents = total_day / total_crashes) %>%
+  ungroup() %>%
+  top_n(10, prop_of_accidents) %>%
+  arrange(desc(prop_of_accidents)) %>%
+  kable()
+
+#Day of the week with the most accidents of 2016 in PA
+pacrashes %>%
+  mutate(total_crashes = n()) %>%
+  group_by(Month, Weekday, total_crashes) %>%
+  filter(Weekday == "Wednesday") %>%
+  summarise(total_day = n()) %>%
+  summarise(prop_of_accidents = total_day / total_crashes) %>%
+  ungroup() %>%
+  top_n(10, prop_of_accidents) %>%
+  arrange(desc(prop_of_accidents)) %>%
+  kable()
+
+#Bar Graph of the month with the most accidents in PA
+pacrashes %>%
+  ggplot(aes(fct_infreq(Month))) +
+  geom_bar(fill = "white", color = "purple") +
+  coord_flip() +
+  labs(
+    "center",
+    title = "Total Number of Accidents per Month",
+    x = "Month",
+    y = "Number of Accidents"
+  )
+
+#Weekday with the most accidents of 2016 in PA
+pacrashes %>%
+  mutate(total_crashes = n()) %>%
+  group_by(Weekday, total_crashes) %>%
+  summarise(total_day = n()) %>%
+  summarise(prop = total_day / total_crashes) %>%
+  arrange(desc(prop)) %>%
+  kable()
+
+#Bar Graph of the weekday with the most accidents in PA
+pacrashes %>%
+  ggplot(aes(fct_infreq(Weekday))) +
+  geom_bar(fill = "blue", color = "green") +
+  coord_flip() +
+  labs(
+    "center",
+    title = "Total Number of Accidents per Weekday",
+    x = "Weekday",
+    y = "Number of Accidents"
+  )
+
+#Boxplot of the average number of crashes a month across a week
+pacrashes %>%
+  group_by(Month, Weekday) %>%
+  summarise(total = n()) %>%
+  ggplot(aes(Weekday, total)) +
+  geom_boxplot() +
+  labs(
+    "center",
+    title = "Mean Number of Accidents per Weekday",
+    x = "Weekday",
+    y = "Mean Number of Accidents"
+  )
+```
+
+#Additional Questions
+After investigating a few simple questions, I looked even further into my data and found variables on ages of drivers involved in the accidents, the types of drivers involved, what objects were hit, casualty numbers, and all sorts of details about an average accident.  This along with my inability to map all of my data points on one map of Pennsylvania without crashing in R Studio led me to create the following two questions:  1. are drunk, drugged, distracted, or drivers on their cellphones more dangerous (in number) and 2. which age groups in Pennsylvania actually have the worst drivers.  In addition, I created monthly datasets that worked in terms of plotting accidents across all of Pennsylvania without crashing R Studio.
+
+##Maps of crashes from month to month
+I wanted to make a map of Pennsylvania with all 128,000 accidents plotted, but our server/R Studio is unable to handle such a large command.  Thus, I broke the dataset into smaller month datasets so that I could plot accidents from month to month in order to get a general idea of where accidents occur in PA (both road structures and counties).  In addition because I live in Cumberland County and see all the accidents that occur in Carlisle due to I-81 (and its terrible on ramps), I wanted to plot these maps to see if these accidents are really occurring on I-81.  However due to Google's query restriction, I am unable to knit my pdf with all of these maps without going over limit.  I commented them out for the sake of knitting to a pdf but include them in my project so that any individual that would like to observe these on their own computer can. The highways in Cumberland County are clearly outlined with dots which makes sense as the most accidents in Pennsylvania occur on highways.  Overall comparing month to month, it did not appear point wise that accidents occurred more frequently in one area more frequently for one month than the next.  Erie was interesting though because it Erie the density map in January and July in terms of higher proportions of accidents but didn't make it on the map in November (January and July produce higher amounts of precipitation leading to more accidents?).  Using the density and points maps and replacing the month variable in the ggplot, each month's accidents can be viewed across the entire state of Pennsylvania.
+```{r echo=TRUE, message= FALSE, warning=FALSE}
+january <- monthlydata(pacrashes, "January")
+february <- monthlydata(pacrashes, "February")
+march <- monthlydata(pacrashes, "March")
+april <- monthlydata(pacrashes, "April")
+may <- monthlydata(pacrashes, "May")
+june <- monthlydata(pacrashes, "June")
+july <- monthlydata(pacrashes, "July")
+august <- monthlydata(pacrashes, "August")
+september <- monthlydata(pacrashes, "September")
+october <- monthlydata(pacrashes, "October")
+november <- monthlydata(pacrashes, "November")
+december <- monthlydata(pacrashes, "December")
+
+#Google Map of PA
+pa_map <- get_map("Pennsylvania", zoom = 7)
+
+#cumberland_map <- get_map("Cumberland County Pennsylvania", zoom = 10, maptype = "roadmap")
+
+cumberland <- pacrashes %>% 
+  filter(CountyName == "Cumberland") %>% 
+  filter(!is.na(Longitude)) %>% 
+  filter(!is.na(Latitude))
+
+#carlisle_map <- get_map("Carlisle Pennsylvania", zoom = 13, maptype = "roadmap")
+
+carlisle <- pacrashes %>% 
+  filter(MunicipalityName == "Carlisle Boro") %>% 
+  filter(!is.na(Longitude)) %>% 
+  filter(!is.na(Latitude))
+
+#Map of accidents in Cumbeland County based on Road Conditions
+#ggmap(cumberland_map, extent = "device", base_layer = ggplot(cumberland, aes(Longitude, Latitude)))+
+# geom_point(alpha = 0.6,size = 0.8, aes(color = RoadCondition))
+
+#Map of accidents in Carlisle, PA based on Road Conditions
+#ggmap(carlisle_map, extent = "device", base_layer = ggplot(carlisle, aes(Longitude, Latitude)))+
+#  geom_point(alpha = 0.6,size = 0.8, aes(color = RoadCondition))+
+#  scale_x_continuous(limits = c(min(carlisle$Longitude), max(carlisle$Longitude)))+
+#  scale_y_continuous(limits = c(min(carlisle$Latitude), max(carlisle$Latitude)))
+
+#Density map of PA accidents in January
+ggmap(pa_map, extent = "device", base_layer = ggplot(january, aes(Longitude, Latitude)))+
+ stat_density2d(aes(fill = ..level..),geom = "polygon", alpha = 0.4)
+
+#Point map of PA accidents in January
+ggmap(pa_map, extent = "device", base_layer = ggplot(january, aes(Longitude, Latitude)))+
+  geom_point(alpha = 0.6,size = 0.8, aes(color = Weather))
+```
+
+##Who is more dangerous:  drunk drivers, drugged drivers, or drivers on their cellphones?
+I was really curious as to which one of these groups would cause the most accidents (especially with the ongoing opioid crisis) and was not too surprised by the fact that alcohol related accidents occurred more frequently that drugged drivers or drivers on their cellphones.  However after hearing an underwriter in car insurance give a talk in my financial management class, I decided to further investigate how many accidents are caused due to drivers being distracted (taking cellphones out of the definition of distracted).  I quickly found that distracted drivers cause the most accidents out of all the other groups!  The speaker in my class told us that our age range (18-22) is known for distracted driving as we like to turn up our radios, put down our windows, and "fly."  This does bring up a good point that unfocused driving causes a lot of accidents!  With all of the technology installed in cars, i.e. dvd players, gps, car phones, not to mention every day distractions as talking to passengers, eating food, smoking, applying makeup, or even rubbernecking (staring at an accident while driving past it), it can be really hard to stay focused on the road.  That being said, there are many other variables in the dataset that could have been grouped into distracted driving as drinking, doing drugs, and being on a cellphone were all included a distracted driving.
+
+```{r message= FALSE, warning=FALSE}
+#Number of accidents involving drugs, alcohol, or cellphones
+pacrashes %>%
+  summarise(
+    Drugs = sum(DruggedDriver), CellPhone = sum(CellPhone),
+    Alcohol = sum(AlcoholRelated)
+  )
+
+#Number of accidents involving distracted dribers (excluding drugs, alcohol, and cellphones)
+pacrashes %>%
+  filter(Distracted == 1 & CellPhone == 0 &
+    DruggedDriver == 0 & AlcoholRelated == 0) %>%
+  summarise(total_Distracted = n())
+
+drugs <- pacrashes %>% 
+  filter(DruggedDriver == 1)
+
+alcohol <- pacrashes %>% 
+  filter(AlcoholRelated == 1)
+
+cellphone <- pacrashes %>% 
+  filter(CellPhone == 1)
+
+distracted <- pacrashes %>% 
+  filter(Distracted == 1 & CellPhone == 0 & DruggedDriver == 0 & AlcoholRelated == 0)
+
+#Map of drunk driver accidents
+ggmap(pa_map, extent = "device", base_layer = ggplot(alcohol, aes(Longitude, Latitude)))+
+  geom_point(alpha = 0.4,size = 0.8, color = "brown")
+
+#Map of drugged driver accidents
+ggmap(pa_map, extent = "device", base_layer = ggplot(drugs, aes(Longitude, Latitude)))+
+  geom_point(alpha = 0.4,size = 0.8, color = "red")
+
+#Map of drivers on their cellphones accidents
+ggmap(pa_map, extent = "device", base_layer = ggplot(cellphone, aes(Longitude, Latitude)))+
+  geom_point(alpha = 0.4,size = 0.8, color = "orange")
+
+#Map of distracted driver accidents
+ggmap(pa_map, extent = "device", base_layer = ggplot(distracted, aes(Longitude, Latitude)))+
+  geom_point(alpha = 0.4,size = 0.8, color = "purple")
+```
+
+##Which age group has the worst drivers?
+While I highly expected younger drivers to have a higher proportion of accidents per year, I was really surprised to find that people between the ages of 50 to 64 have the largest proportion of accidents in Pennsylvania. I assumed that this had to be due to the fact that the largest portion of people in Pennsylvania (and thus the largest number of people on the road) are baby boomers born between 1946 to 1964.  However after some quick research, I found that 37.6% of PA residents are between the ages of 21 and 49 while only 21% of PA residents are between the ages of 50 and 64!  For 6.6% more people, residents between the ages of 21 to 49 are causing 1% fewer accidents than those aged 50 to 64! Further still, roughly 7.7% of PA residents are 16 to 20 years old. By taking proportions of population into consideration along with proportion of accidents, I found that 19% of all 2016 accidents were caused by roughly 7.7% of the population (a ratio of 2.46 to 1) while only 32% were caused by 21% of the population (a ratio of 1.52 to 1).  Clearly from the ratios, a larger number of accidents are caused by drivers under the age of 20 despite the largest proportion of accidents in PA in 2016 involved people aged 50 to 64.  To be fair, this dataset did not tell me whether out of state drivers were included so these ratios could be a bit skewed depending on the residency of the people involved in the accident.
+https://suburbanstats.org/population/how-many-people-live-in-pennsylvania
+https://pasdc.hbg.psu.edu/sdc/pasdc_files/pastats/PAFacts_2017.pdf
+```{r message=FALSE, warning= FALSE}
+pacrashes %>%
+  summarise(
+    Total_Crashes = n(),
+    "16 to 20" = (sum(SixteenYODriverCount) +
+      sum(SeventeenYODriverCount) + sum(EighteenYODriverCount) +
+      sum(NineteenYODriverCount) + sum(TwentyYODriverCount))/Total_Crashes*100,
+    "21 to 49" = (Total_Crashes - (sum(SeventyFivePlusYODriverCount) +
+      sum(SixtyFiveToSeventyFourYODriverCount) + sum(FiftyToSixtyFourYODriverCount) +
+      sum(SixteenYODriverCount) + sum(SeventeenYODriverCount) + sum(EighteenYODriverCount) +
+      sum(NineteenYODriverCount) + sum(TwentyYODriverCount)))/Total_Crashes*100,
+    "50 to 64" = sum(FiftyToSixtyFourYODriverCount)/Total_Crashes*100,
+    "65 to 74" = sum(SixtyFiveToSeventyFourYODriverCount)/Total_Crashes*100,
+    "75+" = sum(SeventyFivePlusYODriverCount)/Total_Crashes*100
+  ) %>% 
+  kable()
+
+pacrashes %>%
+  summarise(
+    Total_Crashes = n(),
+    "16  to  20" = (sum(SixteenYODriverCount) +
+      sum(SeventeenYODriverCount) + sum(EighteenYODriverCount) +
+      sum(NineteenYODriverCount) + sum(TwentyYODriverCount)),
+    "21  to  49" = (Total_Crashes - (sum(SeventyFivePlusYODriverCount) +
+      sum(SixtyFiveToSeventyFourYODriverCount) + sum(FiftyToSixtyFourYODriverCount) +
+      sum(SixteenYODriverCount) + sum(SeventeenYODriverCount) + sum(EighteenYODriverCount) +
+      sum(NineteenYODriverCount) + sum(TwentyYODriverCount))),
+    "50  to  64" = sum(FiftyToSixtyFourYODriverCount),
+    "65  to  74" = sum(SixtyFiveToSeventyFourYODriverCount),
+    "75+  " = sum(SeventyFivePlusYODriverCount)
+  ) %>% 
+  kable()
+
+#Dataset of 16-20 year old drivers
+sixteen <- pacrashes %>% 
+  filter(SixteenYODriverCount > 0)
+
+#Dataset of 50-64 year old drivers
+fifty <- pacrashes %>% 
+  filter(FiftyToSixtyFourYODriverCount > 0)
+
+#Point map of all accidents caused by drivers ages 16-20
+ggmap(pa_map, extent = "device", base_layer = ggplot(sixteen, aes(Longitude, Latitude)))+
+  geom_point(alpha = 0.4,size = 0.8, color = "magenta")
+
+#Point map of all accidents caused by drivers ages 50-64
+ggmap(pa_map, extent = "device", base_layer = ggplot(fifty, aes(Longitude, Latitude)))+
+  geom_point(alpha = 0.4,size = 0.8, color = "navy")
+  
+```
+
+#Summary
+This was a great step into plotting accidents in Pennsylvania, but I feel like this project could go much farther if given more time and resources.  Unfortunately, I ran into a lot of trouble trying to do this project as our server did not seem able to handle my dataset and gave me errors from the start to the end (unexpected empty response from server, error code 127 no memory, error occurred during transmission).  No matter how many times I tried to simplify my dataset or even take a random sample once I received one of those error codes I was unable to work on my project for at least an hour or so until the error was fixed.  That being said, I am satisfied with what I found and was able to do given the time constraints, size of my dataset, and errors from the server/R studio.  If the server was able to handle all 2.63 million rows of data that the original dataset contains, it would be interesting to plot how changing road structures have influenced accidents over time (do we have more accidents now than in the past or fewer because of the construction of new roads?).  As this dataset is only from 2016, I wouldn't want to say that any of the questions I answered would be the same in the next year as really this is such a small sample of the hundreds of thousands of accidents that occurred in the past 10 years.
+
+I did come to the conclusion that travelling should be avoided on Fridays.  In fact on Friday, April 13, I sat in 1.5 hours of traffic just to get home due to an accident on I-81!  I also learned that I should be really cautious while driving in November and December, although my family has been driving to New Jersey through Philadelphia on the Wednesday before Thanksgiving for the past forever and have never had much traffic.  The rest of my questions did not produce too surprising results.  Even the percentages of accidents caused by different age groups was very similar to those an underwriter that spoke to my Risk Management and Insurance class showed us (although I must once again state that the dataset did not tell me if an individual involved in the accident was a state resident)  What most surprised me out of the whole project was the small proportion of accidents caused by people on their cellphone when the number of advertisements and advocacy groups calling for people to get off of their cellphones while in the car is so high.  Perhaps accidents caused by people on their cellphones are more deadly?  That being said, there is such a larger number of accidents caused by distracted driving.  Eating, smoking, doing makeup, reading the newspaper, it doesn't matter.  It can wait.  In conclusion, accidents happen more commonly in good weather than in bad weather, not to mention more commonly in urban than rural areas.  Speed limits are meant to be followed, and full attention should be given to the road at all times.  
